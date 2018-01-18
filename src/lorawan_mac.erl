@@ -100,52 +100,32 @@ get_device_frid(DevAddr) ->
 %	[H|_] = mnesia:dirty_select(txframes, [{#txframe{devaddr=DevAddr, _='_'}, [], ['$_']}])
 
 	case mnesia:dirty_select(txframes, [{#txframe{devaddr=DevAddr, _='_'}, [], ['$_']}]) of
-		[] -> io:fwrite("no frame~n"),
-		      undefined;
+		[] -> undefined;
 		[TxFrame|_Tail] -> 
-			io:fwrite("~tp ~n", [TxFrame#txframe.frid]),
 			TxFrame#txframe.frid
 	end.		
 
 handle_downlink_ps_poll(Link, Time, TxData, RxQ) ->
-    io:fwrite("handle_downlink_ps_poll init~n"),
-    io:fwrite("TxDelay: ~tp ~n", [Time]),
-    io:fwrite("freq: ~tp ~n", [RxQ#rxq.freq]),
-
-    %TxQ = #txq{region=Link#link.region, freq=Link#link.last_rxq#rxq.freq, datr=Link#link.last_rxq#rxq.datr, codr=Link#link.last_rxq#rxq.codr},
     TxQ = #txq{region=Link#link.region, freq=RxQ#rxq.freq, datr=RxQ#rxq.datr, codr=RxQ#rxq.codr},
-    %TxQ = lorawan_mac_region:rx1_rf(Link#link.region, Link#link.last_rxq),
-
-    io:fwrite("after rx1_rf~n"),
-
-    % will ACK immediately, so server-initated Class C downlinks have ACK=0
     send_unicast(Link, TxQ#txq{tmst=Time}, 0, lorawan_mac_commands:build_fopts(Link), TxData#txdata{confirmed=false}).
 
 
 
 handle_ps_poll(Trid, RxQ) ->
-	io:fwrite("handle_ps_poll init~n"),
 	[TxFrame] = mnesia:dirty_read(txframes, Trid),
 
-	io:fwrite("TxFrame: ~tp ~n",[TxFrame]),
-
 	case mnesia:dirty_read(links, TxFrame#txframe.devaddr) of
-		[] -> io:fwrite("no links~n"),
+		[] -> 
 		      undefined;
 		[Link|_] ->
-			io:fwrite("yes links~n"),
 			mnesia:dirty_delete(txframes, Trid),
 			{ok, Delay} = application:get_env(lorawan_server, rx1_delay),
            		TxDelay = Delay + RxQ#rxq.tmst,
-           		io:fwrite("TxDelay: ~tp~n", [TxDelay]),
-			io:fwrite("tmst: ~tp ~n", [RxQ#rxq.tmst]),
 			lorawan_handler:downlink_ps_poll(Link, TxDelay, TxFrame#txframe.txdata, RxQ)
 	end.
 
 process_frame1(Gateway, RxQ, <<2#111:3, _:5>> = Msg, <<DevAddr0:4/binary>> = MIC) ->
     DevAddr = reverse(DevAddr0),
-    io:fwrite("Received ps_poll~n"),
-    io:fwrite("~tp~n", [DevAddr]),
 
     lorawan_handler:store_frame(DevAddr, #txdata{data = <<1>>}),
     lorawan_handler:store_frame(DevAddr, #txdata{data = <<2>>}),
@@ -153,10 +133,9 @@ process_frame1(Gateway, RxQ, <<2#111:3, _:5>> = Msg, <<DevAddr0:4/binary>> = MIC
     Frid = get_device_frid(DevAddr),
     
     case Frid of
-	undefined -> io:fwrite("no Frid~n"),
+	undefined -> 
 		     ok;
 	Trid ->
-		io:fwrite("yes Frid~n"), 
 		handle_ps_poll(Trid, RxQ),
 		io:fwrite("Send packet~n")
     end;
@@ -497,11 +476,8 @@ handle_rxpk(Gateway, RxQ, MType, Link, Fresh, Frame)
 handle_uplink(Gateway, RxQ, Confirm, Link, #frame{devaddr=DevAddr, adr=ADR,
         adr_ack_req=ADRACKReq, ack=ACK, fcnt=FCnt, fport=FPort, fopts=FOpts, data=RxData}=Frame) ->
     % store parameters
-
-
     io:fwrite("this is handle_uplink~n"),
 
-	
     DataRate = lorawan_mac_region:datar_to_dr(Link#link.region, RxQ#rxq.datr),
     ULink =
         case Link#link.adr_use of
@@ -618,9 +594,6 @@ repeat_downlink(DevAddr, ACK) ->
     end.
 
 send_unicast(#link{devaddr=DevAddr}, TxQ, ACK, FOpts, #txdata{confirmed=false}=TxData) ->
-   
-    io:fwrite("send_unicast init~n"),
-
     PHYPayload = encode_unicast(2#011, DevAddr, ACK, FOpts, TxData),
     ok = mnesia:dirty_write(pending, #pending{devaddr=DevAddr, confirmed=false, phypayload=PHYPayload}),
     {send, DevAddr, TxQ, PHYPayload};
