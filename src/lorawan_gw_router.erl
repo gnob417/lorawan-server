@@ -82,7 +82,7 @@ value_or_default(_Num, Def) -> Def.
 init([]) ->
     lager:debug("[beacon] init"),
     BeaconTimer = erlang:send_after(1, self(), beacon),
-    Downlink_timer = erlang:send_after(1,self(), pending_downlink)
+    Downlink_timer = erlang:send_after(1,self(), pending_downlink),
     {ok, #state{pulladdr=dict:new(), recent=dict:new(), beacon_timer = BeaconTimer, downlink_timer = Downlink_timer}}.
 
 handle_call(_Request, _From, State) ->
@@ -187,13 +187,14 @@ handle_info(pending_downlink, #state{pulladdr = MACDict, downlink_timer = Old_do
               ok;
         Else ->
             Link = lists:nth(rand:uniform(length(All_links)), All_links),
+    
+    	    Picked_Addr = Link#link.devaddr,    
+            io:fwrite("Picked_addr: ~p ~n", [Picked_Addr]),
 
-    Picked_Addr = Link#link.devaddr,    
-    io:fwrite("Picked_addr: ~p ~n", [Picked_Addr]),
-
-    % make txdata
-    lorawan_handler:store_frame(Picked_Addr, #txdata{data = <<1>>}),
-    io:fwrite("store downlink frame~n"),
+            % make txdata
+            lorawan_handler:store_frame(Picked_Addr, #txdata{data = <<1>>}),
+            io:fwrite("store downlink frame~n")
+    end,
 
     % next downlink timer
     NewDownlink_timer = erlang:send_after(16000, self(), pending_downlink),
@@ -237,3 +238,4 @@ store_frame({Req, MAC, RxQ, PHYPayload}, Dict) ->
     end.
 
 % end of file
+
