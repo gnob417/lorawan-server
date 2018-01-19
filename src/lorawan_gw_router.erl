@@ -136,6 +136,29 @@ handle_cast({downlink_error, _MAC, DevAddr, Error}, State) ->
     lorawan_utils:throw_error({node, DevAddr}, Error),
     {noreply, State}.
 
+handle_TxData() ->
+    {atomic, PendingFrames} = mnesia:transaction(
+        fun() ->
+                mnesia:write_lock_table(txframes),
+                PendingFrames = mnesia:match_object(txframes, #txframe{_='_'}, read),
+
+                PendingFrames
+        end),
+
+    PendingDevAddr = lists:map(
+  	fun(Frame) -> 
+		Frame#txframe.devaddr
+	end, 
+	PendingFrames),
+
+    io:fwrite("pending addr: ~p ~n", [PendingDevAddr]),
+    ForTxData = lists:usort(PendingDevAddr),
+    io:fwrite("after usort: ~p ~n", [ForTxData]),
+
+    NumTxData = length(ForTxData),
+    io:fwrite("NumTxData: ~p ~n", [NumTxData]).
+
+
 
 handle_info({process, PHYPayload}, #state{recent=Recent}=State) ->
     % find the best (for now)
@@ -152,6 +175,8 @@ handle_info({process, PHYPayload}, #state{recent=Recent}=State) ->
 handle_info(beacon, #state{pulladdr = MACDict, beacon_timer = OldBeaconTimer}=State) ->
     erlang:cancel_timer(OldBeaconTimer),
     lager:debug("[beacon] system_time = ~p", [erlang:system_time(millisecond)]),
+
+    handle_TxData(),
 
     % send beacon
     TxData = <<128>>, % TODO dummy data now
