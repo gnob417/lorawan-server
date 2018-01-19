@@ -182,7 +182,12 @@ handle_info(pending_downlink, #state{pulladdr = MACDict, downlink_timer = Old_do
     end),
 
     % select DevAddr
-    Link = lists:nth(rand:uniform(length(All_links)), All_links),
+    case All_links of
+        [] -> io:fwrite("No connected devices~n"),
+              ok;
+        Else ->
+            Link = lists:nth(rand:uniform(length(All_links)), All_links),
+
     Picked_Addr = Link#link.devaddr,    
     io:fwrite("Picked_addr: ~p ~n", [Picked_Addr]),
 
