@@ -81,8 +81,8 @@ value_or_default(_Num, Def) -> Def.
 
 init([]) ->
     lager:debug("[beacon] init"),
-    BeaconTimer = erlang:send_after(1, self(), beacon),
-    Downlink_timer = erlang:send_after(1,self(), pending_downlink),
+    BeaconTimer = erlang:send_after(1000, self(), beacon),
+    Downlink_timer = erlang:send_after(20000,self(), pending_downlink),
     {ok, #state{pulladdr=dict:new(), recent=dict:new(), beacon_timer = BeaconTimer, downlink_timer = Downlink_timer}}.
 
 handle_call(_Request, _From, State) ->
@@ -172,8 +172,11 @@ handle_info(beacon, #state{pulladdr = MACDict, beacon_timer = OldBeaconTimer}=St
 
 handle_info(pending_downlink, #state{pulladdr = MACDict, downlink_timer = Old_donwlinkTimer}=State) ->
     erlang:cancel_timer(Old_donwlinkTimer),
+    
+    io:fwrite("handle pending INIT~n"),
+
     % make downlink
-    {atomic, All_links} = mensia:transaction(
+    {atomic, All_links} = mnesia:transaction(
     fun() ->
         mnesia:write_lock_table(links),
         All_links = mnesia:match_object(links, #link{_='_'}, read),
@@ -185,19 +188,19 @@ handle_info(pending_downlink, #state{pulladdr = MACDict, downlink_timer = Old_do
     case All_links of
         [] -> io:fwrite("No connected devices~n"),
               ok;
-        Else ->
+        Links ->
             Link = lists:nth(rand:uniform(length(All_links)), All_links),
     
     	    Picked_Addr = Link#link.devaddr,    
-            io:fwrite("Picked_addr: ~p ~n", [Picked_Addr]),
+            %io:fwrite("Picked_addr: ~p ~n", [Picked_Addr]),
 
             % make txdata
-            lorawan_handler:store_frame(Picked_Addr, #txdata{data = <<1>>}),
-            io:fwrite("store downlink frame~n")
+            lorawan_handler:store_frame(Picked_Addr, #txdata{data = <<1>>})
+            %io:fwrite("store downlink frame~n")
     end,
 
     % next downlink timer
-    NewDownlink_timer = erlang:send_after(16000, self(), pending_downlink),
+    NewDownlink_timer = erlang:send_after(40000, self(), pending_downlink),
 
     {noreply, State#state{downlink_timer = NewDownlink_timer}}.
 
