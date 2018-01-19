@@ -126,17 +126,6 @@ handle_ps_poll(Trid, RxQ) ->
 
 process_frame1(Gateway, RxQ, <<2#111:3, _:5>> = Msg, <<DevAddr0:4/binary>> = MIC) ->
     DevAddr = reverse(DevAddr0),
-
-    {atomic, PendingFrames} = mnesia:transaction(
-	fun() ->
-		mnesia:write_lock_table(txframes),
-		PendingFrames = mnesia:match_object(txframes, #txframe{_='_'}, read),
-		
-		PendingFrames
-        end),
-
-    %io:fwrite("pending frames: ~p~n", [PendingFrames]),
-
     Frid = get_device_frid(DevAddr),
     
     case Frid of
