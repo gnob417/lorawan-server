@@ -127,8 +127,15 @@ handle_ps_poll(Trid, RxQ) ->
 process_frame1(Gateway, RxQ, <<2#111:3, _:5>> = Msg, <<DevAddr0:4/binary>> = MIC) ->
     DevAddr = reverse(DevAddr0),
 
-    lorawan_handler:store_frame(DevAddr, #txdata{data = <<1>>}),
-    lorawan_handler:store_frame(DevAddr, #txdata{data = <<2>>}),
+    {atomic, PendingFrames} = mnesia:transaction(
+	fun() ->
+		mnesia:write_lock_table(txframes),
+		PendingFrames = mnesia:match_object(txframes, #txframe{_='_'}, read),
+		
+		PendingFrames
+        end),
+
+    %io:fwrite("pending frames: ~p~n", [PendingFrames]),
 
     Frid = get_device_frid(DevAddr),
     
@@ -724,3 +731,4 @@ hex_to_binary(Id) ->
     <<<<Z>> || <<X:8,Y:8>> <= Id,Z <- [binary_to_integer(<<X,Y>>,16)]>>.
 
 % end of file
+
