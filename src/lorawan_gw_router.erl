@@ -13,7 +13,7 @@
 -include_lib("lorawan_server_api/include/lorawan_application.hrl").
 -include("lorawan.hrl").
 
--record(state, {pulladdr, recent, beacon_timer}).
+-record(state, {pulladdr, recent, beacon_timer, downlink_timer}).
 
 start_link() ->
     gen_server:start_link({global, ?MODULE}, ?MODULE, [], []).
@@ -82,7 +82,8 @@ value_or_default(_Num, Def) -> Def.
 init([]) ->
     lager:debug("[beacon] init"),
     BeaconTimer = erlang:send_after(1, self(), beacon),
-    {ok, #state{pulladdr=dict:new(), recent=dict:new(), beacon_timer = BeaconTimer}}.
+    Downlink_timer = erlang:send_after(1,self(), pending_downlink)
+    {ok, #state{pulladdr=dict:new(), recent=dict:new(), beacon_timer = BeaconTimer, downlink_timer = Downlink_timer}}.
 
 handle_call(_Request, _From, State) ->
     {stop, {error, unknownmsg}, State}.
@@ -167,7 +168,32 @@ handle_info(beacon, #state{pulladdr = MACDict, beacon_timer = OldBeaconTimer}=St
     % next beacon timer
     NewBeaconTimer = erlang:send_after(128000, self(), beacon),
 
-    {noreply, State#state{beacon_timer = NewBeaconTimer}}.
+    {noreply, State#state{beacon_timer = NewBeaconTimer}};
+
+handle_info(pending_downlink, #state{pulladdr = MACDict, downlink_timer = Old_donwlinkTimer}=State) ->
+    erlang:cancel_timer(Old_donwlinkTimer),
+    % make downlink
+    {atomic, All_links} = mensia:transaction(
+    fun() ->
+        mnesia:write_lock_table(links),
+        All_links = mnesia:match_object(links, #link{_='_'}, read),
+        
+        All_links
+    end),
+
+    % select DevAddr
+    Link = lists:nth(rand:uniform(length(All_links)), All_links),
+    Picked_Addr = Link#link.devaddr,    
+    io:fwrite("Picked_addr: ~p ~n", [Picked_Addr]),
+
+    % make txdata
+    lorawan_handler:store_frame(Picked_Addr, #txdata{data = <<1>>}),
+    io:fwrite("store downlink frame~n"),
+
+    % next downlink timer
+    NewDownlink_timer = erlang:send_after(16000, self(), pending_downlink),
+
+    {noreply, State#state{downlink_timer = NewDownlink_timer}}.
 
 terminate(Reason, _State) ->
     % record graceful shutdown in the log
