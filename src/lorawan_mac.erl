@@ -720,4 +720,3 @@ hex_to_binary(Id) ->
     <<<<Z>> || <<X:8,Y:8>> <= Id,Z <- [binary_to_integer(<<X,Y>>,16)]>>.
 
 % end of file
-
