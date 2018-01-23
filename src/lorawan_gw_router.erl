@@ -136,6 +136,25 @@ handle_cast({downlink_error, _MAC, DevAddr, Error}, State) ->
     lorawan_utils:throw_error({node, DevAddr}, Error),
     {noreply, State}.
 
+
+
+tx_air_time(PL, SF, CR, BW, DE) ->
+    TSym = math:pow(2, SF)/BW,
+    % lorawan uses an explicit header
+    PayloadSymbNb = 8 + max(tx_ceiling((8*PL-4*SF+28+16)/(4*(SF-2*DE)))*CR, 0),
+    % lorawan uses 8 symbols preamble
+    % the last +1 is a correction based on practical experiments
+    1000*((8 + 4.25) + PayloadSymbNb + 1)*TSym.
+
+tx_ceiling(X) ->
+    T = erlang:trunc(X),
+    case (X - T) of
+        Neg when Neg < 0 -> T;
+        Pos when Pos > 0 -> T + 1;
+        _ -> T
+    end.
+
+
 handle_TxData() ->
     {atomic, PendingFrames} = mnesia:transaction(
         fun() ->
@@ -159,10 +178,6 @@ handle_TxData() ->
     NumTxData = length(ForTxData),
     io:fwrite("NumTxData: ~p ~n", [NumTxData]),
 
-    %Transition = lorawan_mac_region:tx_time(59, 12, 5, 125000, 1),
-    Transition = 23,
-    io:fwrite("Transition: ~tp ~n", [Transition]),
-
     Limit_TxData = lists:sublist(ForTxData, 6),
     
     Bin_ForTxData = 
@@ -171,11 +186,14 @@ handle_TxData() ->
 			<<Elem/binary, Acc/binary>>
 		end,
 		<<>>, Limit_TxData),
-    
-    TxData = <<Transition:32, Bin_ForTxData/binary>>,
-  
-    io:fwrite("Bin_Tx: ~tp ~n", [TxData]),
 
+  
+    Transition = length(Limit_TxData) * (tx_ceiling(tx_air_time(59, 12, 5, 125000, 1)) + 1000 + tx_ceiling(tx_air_time(5,12,5,125000,1))),
+    io:fwrite("Transition: ~tp ~n", [Transition]),
+    
+
+    TxData = <<Transition:32, Bin_ForTxData/binary>>,
+    io:fwrite("TxData: ~tp ~n", [TxData]),
     TxData.
     %TxData = <<Bin_ForTxData/binary>>,
     %io:fwrite("TxData: ~p ~n", [TxData]).
@@ -239,7 +257,7 @@ handle_info(pending_downlink, #state{pulladdr = MACDict, downlink_timer = Old_do
             %io:fwrite("Picked_addr: ~p ~n", [Picked_Addr]),
 
             % make txdata
-            lorawan_handler:store_frame(Picked_Addr, #txdata{data = <<1>>}),
+            lorawan_handler:store_frame(Picked_Addr, #txdata{data = <<01>>}),
             io:fwrite("store downlink frame: ~p ~n", [Picked_Addr])
     end,
 
