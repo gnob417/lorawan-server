@@ -152,13 +152,33 @@ handle_TxData() ->
 	PendingFrames),
 
     io:fwrite("pending addr: ~p ~n", [PendingDevAddr]),
+   
     ForTxData = lists:usort(PendingDevAddr),
     io:fwrite("after usort: ~p ~n", [ForTxData]),
 
     NumTxData = length(ForTxData),
-    io:fwrite("NumTxData: ~p ~n", [NumTxData]).
+    io:fwrite("NumTxData: ~p ~n", [NumTxData]),
 
+    %Transition = lorawan_mac_region:tx_time(59, 12, 5, 125000, 1),
+    Transition = 23,
+    io:fwrite("Transition: ~tp ~n", [Transition]),
 
+    Limit_TxData = lists:sublist(ForTxData, 6),
+    
+    Bin_ForTxData = 
+	lists:foldr(
+		fun(Elem, Acc) ->
+			<<Elem/binary, Acc/binary>>
+		end,
+		<<>>, Limit_TxData),
+    
+    TxData = <<Transition:32, Bin_ForTxData/binary>>,
+  
+    io:fwrite("Bin_Tx: ~tp ~n", [TxData]),
+
+    TxData.
+    %TxData = <<Bin_ForTxData/binary>>,
+    %io:fwrite("TxData: ~p ~n", [TxData]).
 
 handle_info({process, PHYPayload}, #state{recent=Recent}=State) ->
     % find the best (for now)
@@ -175,11 +195,10 @@ handle_info({process, PHYPayload}, #state{recent=Recent}=State) ->
 handle_info(beacon, #state{pulladdr = MACDict, beacon_timer = OldBeaconTimer}=State) ->
     erlang:cancel_timer(OldBeaconTimer),
     lager:debug("[beacon] system_time = ~p", [erlang:system_time(millisecond)]),
-
-    handle_TxData(),
-
+    
     % send beacon
-    TxData = <<128>>, % TODO dummy data now
+    TxData = handle_TxData(),
+
     {TxQ, PHYPayload} = lorawan_mac:handle_beacon(TxData),
     lager:debug("[beacon] TxQ = ~p", [TxQ]),
     lager:debug("[beacon] PHYPayload = ~p", [PHYPayload]),
@@ -220,8 +239,8 @@ handle_info(pending_downlink, #state{pulladdr = MACDict, downlink_timer = Old_do
             %io:fwrite("Picked_addr: ~p ~n", [Picked_Addr]),
 
             % make txdata
-            lorawan_handler:store_frame(Picked_Addr, #txdata{data = <<1>>})
-            %io:fwrite("store downlink frame~n")
+            lorawan_handler:store_frame(Picked_Addr, #txdata{data = <<1>>}),
+            io:fwrite("store downlink frame: ~p ~n", [Picked_Addr])
     end,
 
     % next downlink timer
