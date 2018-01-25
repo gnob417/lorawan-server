@@ -472,7 +472,7 @@ handle_rxpk(Gateway, RxQ, MType, Link, Fresh, Frame)
 handle_uplink(Gateway, RxQ, Confirm, Link, #frame{devaddr=DevAddr, adr=ADR,
         adr_ack_req=ADRACKReq, ack=ACK, fcnt=FCnt, fport=FPort, fopts=FOpts, data=RxData}=Frame) ->
     % store parameters
-    io:fwrite("this is handle_uplink~n"),
+    %io:fwrite("this is handle_uplink~n"),
 
     DataRate = lorawan_mac_region:datar_to_dr(Link#link.region, RxQ#rxq.datr),
     ULink =
@@ -527,7 +527,7 @@ handle_uplink(Gateway, RxQ, Confirm, Link, #frame{devaddr=DevAddr, adr=ADR,
             {send, Link#link.devaddr, choose_tx(Link, RxQ), LostFrame};
         {send, TxData} ->
 
-	    io:fwrite("this is send, TxData~n"),
+	    %io:fwrite("this is send, TxData~n"),
 
             send_unicast(Link, choose_tx(Link, RxQ), Confirm, FOptsOut, TxData);
         ok when ShallReply ->
