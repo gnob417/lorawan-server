@@ -81,7 +81,7 @@ value_or_default(_Num, Def) -> Def.
 
 init([]) ->
     lager:debug("[beacon] init"),
-    BeaconTimer = erlang:send_after(1000, self(), beacon),
+    BeaconTimer = erlang:send_after(10000, self(), beacon),
     Downlink_timer = erlang:send_after(20000,self(), pending_downlink),
     {ok, #state{pulladdr=dict:new(), recent=dict:new(), beacon_timer = BeaconTimer, downlink_timer = Downlink_timer}}.
 
@@ -187,10 +187,8 @@ handle_TxData() ->
 		end,
 		<<>>, Limit_TxData),
 
-  
     Transition = length(Limit_TxData) * (tx_ceiling(tx_air_time(59, 12, 5, 125000, 1)) + 1000 + tx_ceiling(tx_air_time(5,12,5,125000,1))),
-    io:fwrite("Transition: ~tp ~n", [Transition]),
-    
+    io:fwrite("Transition: ~p~n", [Transition]),
 
     TxData = <<Transition:32, Bin_ForTxData/binary>>,
     io:fwrite("TxData: ~tp ~n", [TxData]),
@@ -227,6 +225,8 @@ handle_info(beacon, #state{pulladdr = MACDict, beacon_timer = OldBeaconTimer}=St
         end,
         dict:fetch_keys(MACDict)),
 
+    io:fwrite("send beacon\r\n"),
+
     % next beacon timer
     NewBeaconTimer = erlang:send_after(128000, self(), beacon),
 
@@ -258,11 +258,19 @@ handle_info(pending_downlink, #state{pulladdr = MACDict, downlink_timer = Old_do
 
             % make txdata
             lorawan_handler:store_frame(Picked_Addr, #txdata{data = <<01>>}),
-            io:fwrite("store downlink frame: ~p ~n", [Picked_Addr])
+            io:fwrite("store downlink frame: ~p ~n", [Picked_Addr]),
+	    lager:info("pending_downlink : ~p", [Picked_Addr])
+
     end,
 
+    Lambda = 1/20,
+    NextTime = -math:log(1.0 - rand:uniform()) / Lambda,
+    NextInterval = tx_ceiling(NextTime * 1000),     
+
+    io:fwrite("Next interval: ~p ~n", [NextInterval]),
+
     % next downlink timer
-    NewDownlink_timer = erlang:send_after(40000, self(), pending_downlink),
+    NewDownlink_timer = erlang:send_after(NextInterval, self(), pending_downlink),
 
     {noreply, State#state{downlink_timer = NewDownlink_timer}}.
 
